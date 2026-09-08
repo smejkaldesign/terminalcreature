@@ -1388,8 +1388,9 @@ def test_seed_salt_is_pinned():
 
 
 def test_moods():
-    """A blink closes the eyes for a beat; a feed holds a happy face for two
-    seconds; an egg has no eyes to move. Only the eyes change, never the width.
+    """A blink closes the eyes for a beat, twice some windows; a feed chews then
+    holds a happy face; a level that moved goes wide-eyed; a long quiet session
+    dozes off; an egg has no eyes to move. Only the eyes change, never the width.
     """
     print("\nmoods")
     from terminalcreature import sprites
@@ -1397,17 +1398,33 @@ def test_moods():
     base = sprites.sprite("Nim", 2)
     blink = sprites.sprite("Nim", 2, mood="blink")
     happy = sprites.sprite("Nim", 2, mood="happy")
+    chomp = sprites.sprite("Nim", 2, mood="chomp")
+    wow = sprites.sprite("Nim", 2, mood="wow")
+    sleepy = sprites.sprite("Nim", 2, mood="sleepy")
     check(base[1] != blink[1] and "- -" in blink[1], "a blink closes the eyes")
     check("^ ^" in happy[1], "a feed raises them")
-    check([len(r) for r in base] == [len(r) for r in blink] == [len(r) for r in happy], "moods never change the width")
-    check([r for i, r in enumerate(base) if i != 1] == [r for i, r in enumerate(blink) if i != 1],
+    check("> <" in chomp[1], "a mouthful scrunches them")
+    check("O O" in wow[1], "a level-up widens them")
+    check("z z" in sleepy[1], "a long quiet session snores")
+    moods = [base, blink, happy, chomp, wow, sleepy]
+    check(len({tuple(len(r) for r in m) for m in moods}) == 1, "moods never change the width")
+    check(all([r for i, r in enumerate(base) if i != 1] == [r for i, r in enumerate(m) if i != 1] for m in moods),
           "and touch nothing but the eye row")
     check(sprites.sprite("Nim", 0, mood="happy") == sprites.sprite("Nim", 0), "an egg has no eyes to move")
     check("_ _" in sprites.sprite("Wisp", 2, mood="blink")[1], "Wisp rests on a dash, so its blink is an underscore")
     check("* *" in sprites.sprite("Ember", 2, mood="happy")[1], "Ember rests raised, so its happy is a star")
+    check("x x" in sprites.sprite("Quill", 2, mood="chomp")[1], "Quill rests scrunched, so its chomp squeezes shut")
+    check("0 0" in sprites.sprite("Mote", 2, mood="wow")[1], "Mote rests round, so its wow is a zero")
     check(sprites.face("Nim", 2, True, "blink") == "<-->" and sprites.face("Nim", 2, True, "happy") == "<^^>",
           "the compact face swaps the same way")
+    check(sprites.face("Nim", 2, True, "chomp") == "<><>" and sprites.face("Nim", 2, True, "wow") == "<OO>"
+          and sprites.face("Nim", 2, True, "sleepy") == "<zz>", "for every mood")
     check(sprites.face("Nim", 0, True, "happy") == sprites.face("Nim", 0, True), "the compact egg doesn't")
+    pairs = [(sp, m) for m in ("blink", "happy", "chomp", "wow", "sleepy") for sp in sprites.SPECIES_LOOK]
+    check(all(ord(ch) < 128 for sp, m in pairs for ch in sprites.mood_eyes(sp, m) + sprites.mood_eyes(sp, m, True)),
+          "every mood's eyes are plain ascii, so they survive a plain terminal")
+    check(all(sprites.mood_eyes(sp, m) != sprites.look(sp)[1] for sp, m in pairs),
+          "no mood is a species' resting face, so every swap shows")
 
     st = state_mod.default_state()
     st["sessions"]["s1"] = {"at": 10, "ts": 0}
@@ -1418,13 +1435,46 @@ def test_moods():
     fed = st["sessions"]["s1"]["fed_at"]
     gain, save = state_mod.session_gain(st, "s1", 13)
     check(gain == 3 and not save, "the same counter again does not re-stamp")
-    check(state_mod.mood(st, "s1", now=fed + 1.9) == "happy", "happy holds for two seconds after the feed")
-    check(state_mod.mood(st, "s1", now=fed + 2.1) in (None, "blink"), "and lets go after")
-    quiet = 100 * state_mod.BLINK_EVERY  # a multiple, so a window starts here
+    check("leveled_at" not in st["sessions"]["s1"], "a row from before levels were tracked doesn't fake a level-up")
+    check(state_mod.mood(st, "s1", now=fed + 0.1) == "chomp", "a feed opens with a mouthful")
+    check(state_mod.mood(st, "s1", now=fed + state_mod.CHEW_BEAT + 0.1) == "happy", "then swallows")
+    check(state_mod.mood(st, "s1", now=fed + 2 * state_mod.CHEW_BEAT + 0.1) == "chomp", "and takes another")
+    check(state_mod.mood(st, "s1", now=fed + state_mod.CHEW_HOLD + 0.1) == "happy", "chewing done, it holds the happy face")
+    check(state_mod.mood(st, "s1", now=fed + state_mod.HAPPY_HOLD - 0.1) == "happy", "for the whole hold")
+    check(state_mod.mood(st, "s1", now=fed + state_mod.HAPPY_HOLD + 0.1) in (None, "blink"), "and lets go after")
+
+    gain, save = state_mod.session_gain(st, "s1", 100)
+    check(save and "leveled_at" in st["sessions"]["s1"], "a rise that moves the level stamps that too")
+    up = st["sessions"]["s1"]["leveled_at"]
+    check(state_mod.mood(st, "s1", now=up + 0.1) == "wow", "wide eyes on a level-up, over the meal")
+    check(state_mod.mood(st, "s1", now=up + state_mod.WOW_HOLD + 0.1) == "happy", "then the rest of the meal's happy face")
+    check(state_mod.WOW_HOLD < state_mod.HAPPY_HOLD, "so the wide eyes never outlast the meal under them")
+    gain, save = state_mod.session_gain(st, "s1", 101)
+    check(st["sessions"]["s1"]["leveled_at"] == up, "a rise within the same level doesn't re-stamp")
+
+    quiet = state_mod.BLINK_EVERY * state_mod.DOUBLE_EVERY * 100  # a multiple, so a double window starts here
     check(state_mod.mood(st, None, now=quiet + 0.1) == "blink", "a blink lands in its window")
     check(state_mod.mood(st, None, now=quiet + state_mod.BLINK_HOLD + 0.1) is None, "and only in its window")
+    again = quiet + state_mod.BLINK_HOLD + state_mod.BLINK_GAP
+    check(state_mod.mood(st, None, now=again + 0.1) == "blink", "a double window blinks again")
+    check(state_mod.mood(st, None, now=again + state_mod.BLINK_HOLD + 0.1) is None, "and opens after")
+    single = quiet + state_mod.BLINK_EVERY
+    check(state_mod.mood(st, None, now=single + 0.1) == "blink", "the next window blinks once")
+    check(state_mod.mood(st, None, now=single + state_mod.BLINK_HOLD + state_mod.BLINK_GAP + 0.1) is None, "only once")
+    check(state_mod.BLINK_EVERY <= 2.5 and state_mod.BLINK_HOLD >= 0.4, "and blinks are frequent enough to catch")
     st["sessions"]["s1"]["fed_at"] = quiet
-    check(state_mod.mood(st, "s1", now=quiet + 0.1) == "happy", "a feed beats a blink")
+    st["sessions"]["s1"]["leveled_at"] = 0
+    check(state_mod.mood(st, "s1", now=quiet + 0.1) in ("chomp", "happy"), "a feed beats a blink")
+
+    st["sessions"]["s1"]["ts"] = 1000
+    st["sessions"]["s1"]["fed_at"] = 1000
+    check(state_mod.mood(st, "s1", now=1000 + state_mod.SLEEPY_AFTER - 1) in (None, "blink"), "awake until it's been quiet long enough")
+    check(state_mod.mood(st, "s1", now=1000 + state_mod.SLEEPY_AFTER + 1) == "sleepy", "then it dozes off")
+    check(state_mod.mood(st, "s1", now=1000 + state_mod.SLEEPY_AFTER + 1000) == "sleepy", "and stays asleep, no blinking")
+    st["sessions"]["s1"]["fed_at"] = 1000 + state_mod.SLEEPY_AFTER + 1000
+    check(state_mod.mood(st, "s1", now=1000 + state_mod.SLEEPY_AFTER + 1000.1) == "chomp", "a feed wakes it")
+    check(state_mod.mood(st, None, now=1000 + state_mod.SLEEPY_AFTER + 1) in (None, "blink"),
+          "no session, nothing to be quiet against")
 
 
 def _styled_state():
