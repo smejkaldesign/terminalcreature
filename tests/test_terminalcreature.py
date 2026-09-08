@@ -1452,20 +1452,38 @@ def test_moods():
     gain, save = state_mod.session_gain(st, "s1", 101)
     check(st["sessions"]["s1"]["leveled_at"] == up, "a rise within the same level doesn't re-stamp")
 
-    quiet = state_mod.BLINK_EVERY * state_mod.DOUBLE_EVERY * 100  # a multiple, so a double window starts here
-    check(state_mod.mood(st, None, now=quiet + 0.1) == "blink", "a blink lands in its window")
-    check(state_mod.mood(st, None, now=quiet + state_mod.BLINK_HOLD + 0.1) is None, "and only in its window")
-    again = quiet + state_mod.BLINK_HOLD + state_mod.BLINK_GAP
-    check(state_mod.mood(st, None, now=again + 0.1) == "blink", "a double window blinks again")
-    check(state_mod.mood(st, None, now=again + state_mod.BLINK_HOLD + 0.1) is None, "and opens after")
-    single = quiet + state_mod.BLINK_EVERY
-    check(state_mod.mood(st, None, now=single + 0.1) == "blink", "the next window blinks once")
-    check(state_mod.mood(st, None, now=single + state_mod.BLINK_HOLD + state_mod.BLINK_GAP + 0.1) is None, "only once")
-    check(state_mod.BLINK_EVERY <= 2.5 and state_mod.BLINK_HOLD >= 0.4, "and blinks are frequent enough to catch")
+    step, span = 0.01, 600.0
+    shut = [state_mod.blinking(i * step) for i in range(int(span / step))]
+    runs, gaps, i = [], [], 0
+    while i < len(shut):
+        j = i
+        while j < len(shut) and shut[j] == shut[i]:
+            j += 1
+        (runs if shut[i] else gaps).append((j - i) * step)
+        i = j
+    check(0 < sum(shut) / len(shut) < 0.25, "eyes are open most of the time")
+    check(len(runs) >= 60, "and blink often over ten minutes")
+    check(all(abs(r - state_mod.BLINK_HOLD) < 2 * step for r in runs), "every blink is half a second")
+    inner = gaps[1:-1]  # the first and last are cut by the sample edges
+    check(all(state_mod.BLINK_GAP_MIN - step <= g <= state_mod.BLINK_GAP_MAX + step for g in inner),
+          "gaps between blinks fall between one and ten seconds")
+    check(len({round(g, 1) for g in inner}) > 10, "and are drawn at random, not on a beat")
+    block = state_mod.BLINK_BLOCK
+    edge = next(b for b in range(1, 10000) if state_mod._blinks(b - 1)[-1] + state_mod.BLINK_HOLD > block)
+    check(state_mod.blinking(edge * block + 0.01), "a blink across a block edge is not cut short")
+    check(all(state_mod._blinks(b)[0] - 0 >= state_mod.BLINK_GAP_MIN and
+              all(state_mod.BLINK_GAP_MIN <= y - x - state_mod.BLINK_HOLD <= state_mod.BLINK_GAP_MAX
+                  for x, y in zip(state_mod._blinks(b), state_mod._blinks(b)[1:])) for b in range(50)),
+          "every block's own gaps are in range, so the edge gap is at most twice the max")
+    check(all(state_mod.blinking(t) == state_mod.blinking(t) for t in (0.3, 7.7, 59.9, 60.0, 61.2)),
+          "the schedule is read off the clock, so every redraw agrees")
+    quiet = next(i * step for i, s in enumerate(shut) if s)
+    check(state_mod.mood(st, None, now=quiet + step) == "blink", "a blink shows as the blink face")
+    open_at = next(i * step for i, s in enumerate(shut) if not s and i * step > quiet)
+    check(state_mod.mood(st, None, now=open_at + step) is None, "and open eyes as nothing")
     st["sessions"]["s1"]["fed_at"] = quiet
     st["sessions"]["s1"]["leveled_at"] = 0
-    check(state_mod.mood(st, "s1", now=quiet + 0.1) in ("chomp", "happy"), "a feed beats a blink")
-
+    check(state_mod.mood(st, "s1", now=quiet + step) in ("chomp", "happy"), "a feed beats a blink")
     st["sessions"]["s1"]["ts"] = 1000
     st["sessions"]["s1"]["fed_at"] = 1000
     check(state_mod.mood(st, "s1", now=1000 + state_mod.SLEEPY_AFTER - 1) in (None, "blink"), "awake until it's been quiet long enough")
