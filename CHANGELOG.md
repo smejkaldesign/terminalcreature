@@ -3,6 +3,30 @@
 Notable changes, newest first. Versions follow semver; the version lives in
 `terminalcreature/__init__.py` and each release is the matching `v*` tag.
 
+## 3.3.0 (2026-09-07)
+
+Moods. The creature blinks a lot more, eats when it gains xp, and has a few
+more faces to make.
+
+### Changed
+
+- Blinks every 2 seconds instead of every 5, and holds the closed eyes for
+  0.5s so a redraw actually catches it. Every third window blinks twice.
+- A feed is now a meal: the eyes scrunch into a mouthful (`> <`) and open
+  again on a 0.35s beat for 1.5s, then the happy face holds for the rest of
+  3 seconds. Same trigger as before, the session's xp counter rising.
+
+### Added
+
+- Wide eyes (`O O`) for 1.5s when a feed moves the level, then the happy
+  face for the rest of the meal. Sessions written before this version don't
+  fake a level-up on their first feed.
+- Sleepy eyes (`z z`) once a session has gone 30 minutes without a feed. No
+  blinking while asleep; the next feed wakes it.
+- Per-species swaps where the resting eyes already looked like the mood:
+  Quill chomps with `x x`, Mote and Fen go wide with `0 0`. Every mood is
+  plain ascii, only the eye row changes, and the art never changes width.
+
 ## 3.2.0 (2026-09-04)
 
 Auto-wire. Nobody picks hosts any more: the installer wires every agent it
