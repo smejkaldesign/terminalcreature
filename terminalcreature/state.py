@@ -71,7 +71,8 @@ def session_gain(state, session_id, banked):
     # a total below the mark means focus moved to a different creature, so
     # re-baseline instead of rendering a negative
     if row is None or row.get("at", 0) > banked:
-        sessions[session_id] = {"at": banked, "ts": int(time.time())}
+        sessions[session_id] = {"at": banked, "ts": int(time.time()),
+                                "level": metric.level_for(banked, state["settings"]["xp_max"])}
         if len(sessions) > SESSION_KEEP:
             stale = sorted(sessions, key=lambda k: sessions[k].get("ts", 0))[:len(sessions) - SESSION_KEEP]
             for key in stale:
@@ -79,8 +80,13 @@ def session_gain(state, session_id, banked):
         return 0, True
     gain = banked - row["at"]
     # a counter higher than the last one drawn is the moment it ate. stamp it,
-    # and ask to be saved, so the next renders can hold the happy face
+    # and ask to be saved, so the next renders can play out the meal. a level
+    # that moved with it gets its own stamp, for the wide eyes
     if gain > row.get("seen", 0):
+        level = metric.level_for(banked, state["settings"]["xp_max"])
+        if level > row.get("level", level):
+            row["leveled_at"] = time.time()
+        row["level"] = level
         row["seen"] = gain
         row["fed_at"] = time.time()
         return gain, True
@@ -115,24 +121,50 @@ def hookcard_turn(state, session_id, gain, stage_index, mode):
     return show, stage_changed
 
 
-# held long enough to be seen between redraws, short enough not to be a stuck face
-HAPPY_HOLD = 2.0
-# a blink is a beat, not a state: this many seconds out of every window
-BLINK_EVERY = 5.0
-BLINK_HOLD = 0.4
+# a feed is a meal: chewing frames that alternate every CHEW_BEAT for CHEW_HOLD,
+# then a happy face until HAPPY_HOLD is up. held long enough to be seen between
+# redraws, short enough not to be a stuck face
+HAPPY_HOLD = 3.0
+CHEW_HOLD = 1.5
+CHEW_BEAT = 0.35
+# a level that moved gets wide eyes first, then the rest of the meal's happy face
+WOW_HOLD = 1.5
+# a blink is a beat, not a state: this many seconds out of every window. every
+# DOUBLE_EVERY-th window blinks twice, BLINK_GAP apart, so it doesn't tick like a clock
+BLINK_EVERY = 2.0
+BLINK_HOLD = 0.5
+BLINK_GAP = 0.3
+DOUBLE_EVERY = 3
+# nothing eaten this long into a session and it dozes off. the next feed wakes it
+SLEEPY_AFTER = 30 * 60
 
 
 def mood(state, session_id, now=None):
-    """The face to draw right now. "happy" for HAPPY_HOLD after the session's
-    counter last rose, else a "blink" for BLINK_HOLD out of every BLINK_EVERY
-    seconds, else None. Clock-based rather than counted: a statusline redraws
-    whenever the host feels like it, so a count would blink at random.
+    """The face to draw right now, most urgent first. "wow" for WOW_HOLD after
+    the session saw a level rise; "chomp"/"happy" through the meal that follows
+    a feed; "sleepy" once a session has gone SLEEPY_AFTER without one; else a
+    "blink" for BLINK_HOLD out of every BLINK_EVERY seconds, doubled every
+    DOUBLE_EVERY-th window; else None. Clock-based rather than counted: a
+    statusline redraws whenever the host feels like it, so a count would
+    blink at random.
     """
     now = time.time() if now is None else now
     row = (state.get("sessions") or {}).get(session_id) if session_id else None
-    if row and 0 <= now - row.get("fed_at", 0) < HAPPY_HOLD:
-        return "happy"
-    if (now % BLINK_EVERY) < BLINK_HOLD:
+    if row:
+        if 0 <= now - row.get("leveled_at", 0) < WOW_HOLD:
+            return "wow"
+        since = now - row.get("fed_at", 0)
+        if 0 <= since < HAPPY_HOLD:
+            if since < CHEW_HOLD and int(since / CHEW_BEAT) % 2 == 0:
+                return "chomp"
+            return "happy"
+        if row.get("ts") and now - max(row.get("fed_at", 0), row["ts"]) >= SLEEPY_AFTER:
+            return "sleepy"
+    phase = now % BLINK_EVERY
+    if phase < BLINK_HOLD:
+        return "blink"
+    again = BLINK_HOLD + BLINK_GAP
+    if int(now // BLINK_EVERY) % DOUBLE_EVERY == 0 and again <= phase < again + BLINK_HOLD:
         return "blink"
     return None
 
