@@ -148,7 +148,8 @@ def _bank(st, session_id):
         dirty = True
     c = state_mod.focused(st)
     gain, changed = state_mod.session_gain(st, session_id, c.get("xp_banked", 0) if c else 0)
-    if dirty or changed:
+    seen = state_mod.touch(st, session_id)
+    if dirty or changed or seen:
         state_mod.save(st)
     return xp, counts, gain, state_mod.mood(st, session_id)
 
