@@ -10,8 +10,11 @@ more faces to make.
 
 ### Changed
 
-- Blinks every 2 seconds instead of every 5, and holds the closed eyes for
-  0.5s so a redraw actually catches it. Every third window blinks twice.
+- Blinks on a random schedule instead of a fixed 0.4s-of-every-5s beat: eyes
+  shut for 0.5s, then open for a gap drawn between 1 and 10 seconds. The
+  schedule is read off the clock in hour blocks, so every redraw agrees on it
+  with nothing stored. Eyes are open most of the time; every other mood sits
+  on top of the blinking and it resumes when they let go.
 - A feed is now a meal: the eyes scrunch into a mouthful (`> <`) and open
   again on a 0.35s beat for 1.5s, then the happy face holds for the rest of
   3 seconds. Same trigger as before, the session's xp counter rising.
