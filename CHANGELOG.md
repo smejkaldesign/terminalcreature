@@ -3,6 +3,13 @@
 Notable changes, newest first. Versions follow semver; the version lives in
 `terminalcreature/__init__.py` and each release is the matching `v*` tag.
 
+## Unreleased
+
+### Fixed
+
+- `list` and `doctor` no longer reveal an unhatched egg's suggested name, and
+  both surfaces use consistent capitalization for egg labels.
+
 ## 3.3.0 (2026-09-07)
 
 Moods. The creature blinks a lot more, eats when it gains xp, and has a few

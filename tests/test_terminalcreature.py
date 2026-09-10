@@ -801,6 +801,36 @@ def test_egg_reveals_nothing():
         os.environ.pop("NO_COLOR", None)
 
 
+def test_cli_hides_unhatched_name():
+    """The list and doctor commands must not reveal an egg's suggested name."""
+    print("\ncli hides unhatched name")
+    import contextlib
+    import io
+    from terminalcreature import cli
+
+    st = state_mod.default_state()
+    c = state_mod.create(st, name="SuggestedName")
+    st["focused"] = c["id"]
+    real_load = cli._load
+    try:
+        cli._load = lambda: st
+        listed = io.StringIO()
+        with contextlib.redirect_stdout(listed):
+            cli.cmd_list([])
+        out = listed.getvalue()
+        check("SuggestedName" not in out, "list hides the suggested name")
+        check("–" in out and "Unhatched" in out, "list uses the egg placeholders")
+
+        diagnosed = io.StringIO()
+        with contextlib.redirect_stdout(diagnosed):
+            cli.cmd_doctor([])
+        out = diagnosed.getvalue()
+        check("SuggestedName" not in out, "doctor hides the suggested name")
+        check("Unhatched banked" in out and "(Egg)" in out, "doctor capitalizes the egg labels")
+    finally:
+        cli._load = real_load
+
+
 def test_source_status():
     """A zero XP reading has three causes and they need three different answers.
 
@@ -3199,6 +3229,7 @@ if __name__ == "__main__":
     test_project_statusline_override()
     test_empty_hatch_is_a_moment()
     test_egg_reveals_nothing()
+    test_cli_hides_unhatched_name()
     test_source_status()
     test_installer_wraps_any_statusline()
     test_plugin_wiring()
