@@ -801,6 +801,121 @@ def test_egg_reveals_nothing():
         os.environ.pop("NO_COLOR", None)
 
 
+def test_egg_in_its_box():
+    """The egg you just laid has to look like the thing in the statusline.
+
+    new and card drew a bare sprite while compose boxed it, so the first thing
+    anyone saw after /creature-new was a floating egg or, via list, no egg at
+    all. One panel draws every surface now, so they can't drift apart again.
+    """
+    print("\negg in its box")
+    from terminalcreature import render
+
+    os.environ["NO_COLOR"] = "1"
+    try:
+        st = state_mod.default_state()
+        c = state_mod.create(st, name="Shell")
+        for want_uni in (True, False):
+            st["settings"]["unicode"] = want_uni
+            uni = render.unicode_ok(st["settings"])
+            corners = render.BOX_UNICODE if uni else render.BOX_ASCII
+            where = "unicode" if uni else "ascii"
+            lid = [r for r in render.compose(st, "BAR", xp=0, counts={}).split("\n") if corners[0] in r][0].strip()
+            for label, out in (("new", render.egg_notice(st, c)), ("card", render.egg_card(st, c))):
+                check(lid in out, "%s: the egg sits in the statusline's box (%s)" % (label, where))
+                beside = any(corners[3] in r and ("egg" in r or "Unhatched" in r) for r in out.split("\n"))
+                check(beside, "%s: with its caption beside it, like the statusline (%s)" % (label, where))
+        st["settings"]["unicode"] = True
+        uni = render.unicode_ok(st["settings"])
+        corners = render.BOX_UNICODE if uni else render.BOX_ASCII
+        lid = [r for r in render.compose(st, "BAR", xp=0, counts={}).split("\n") if corners[0] in r][0].strip()
+        c["xp_banked"] = 700
+        state_mod.reveal(st)
+        check(lid in render.card(st, xp=700, counts={}), "the hatched card draws the same box")
+        check(lid in render.hatch_ceremony(st, c), "so does the reveal")
+
+        st["settings"]["border"] = False
+        surfaces = (
+            ("new", render.egg_notice(st, c)), ("card", render.egg_card(st, c)),
+            ("hatched card", render.card(st, xp=700, counts={})), ("reveal", render.hatch_ceremony(st, c)),
+            ("statusline", render.compose(st, "BAR", xp=700, counts={})),
+        )
+        for label, out in surfaces:
+            check(render.BOX_UNICODE[0] not in out and render.BOX_ASCII[0] not in out, "%s: border off drops the box" % label)
+    finally:
+        os.environ.pop("NO_COLOR", None)
+
+
+def test_hatch_plays_out():
+    """Opening the egg is a moment, so it gets frames rather than a jump cut.
+
+    The egg rocks, cracks, and whatever is inside looks out before the reveal.
+    A terminal draws the frames over each other; anything else gets them side
+    by side, wrapped to the width, so an agent's transcript shows the hatch too.
+    """
+    print("\nhatch plays out")
+    import contextlib
+    import io
+    from terminalcreature import cli, render, sprites
+
+    os.environ["NO_COLOR"] = "1"
+    try:
+        st = state_mod.default_state()
+        c = state_mod.create(st, name="Zask")
+        c["seed"] = "seed-7"
+        c["xp_banked"] = 700
+        state_mod.reveal(st)
+        eyes = sprites.look(creature.hydrate(c)["species"])[1]
+
+        frames = render.hatch_frames(st, c)
+        check(len(frames) == 5, "five frames, got %d" % len(frames))
+        arts = ["\n".join(cells) for cells, _ in frames]
+        check(arts[0] == arts[2] and arts[0] != arts[1], "the egg rocks one way, the other, and back")
+        check("( ooo )" in arts[0] and "( ooo )" in arts[1], "and it's still the egg while it rocks")
+        check("o/o" in arts[3], "then it cracks")
+        check("( %s )" % eyes in arts[4] and "___" not in arts[4].split("\n")[1], "then what's inside looks out of the open shell")
+        check(all(len(cells) == len(frames[0][0]) for cells, _ in frames), "every frame is the same height")
+
+        out = render.hatch_ceremony(st, c)
+        rows = out.split("\n")
+        check(max(len(r) for r in rows) <= render.CARD_LINE_WIDTH, "the strip fits a card's width")
+        row = [r for r in rows if "o/o" in r][0]
+        check(row.index("( ooo )") < row.index("o/o") < row.index("( %s )" % eyes), "laid out left to right, in order")
+        check(out.index("o/o") < out.index("Zask,"), "and the strip comes before the name")
+        narrow = render.hatch_strip(st, c, width=40)
+        check(max(len(r) for r in narrow.split("\n")) <= 40 and len(narrow.split("\n\n")) == 3,
+              "a narrow width wraps the strip onto more rows")
+
+        # a terminal plays it in place: the same frames, each drawn over the last
+        class Tty(io.StringIO):
+            def isatty(self):
+                return True
+
+        st2 = state_mod.default_state()
+        c2 = state_mod.create(st2, name="Zask")
+        saved = (cli._load, render.HATCH_BEAT, state_mod.measure_now, state_mod.write_cache, state_mod.save)
+        cli._load = lambda: st2
+        render.HATCH_BEAT = 0
+        state_mod.measure_now = lambda settings: (700, {"memories": 3})
+        state_mod.write_cache = lambda xp, counts: None
+        state_mod.save = lambda state, **kw: None
+        try:
+            buf = Tty()
+            with contextlib.redirect_stdout(buf):
+                rc = cli.cmd_hatch([])
+            out = buf.getvalue()
+        finally:
+            cli._load, render.HATCH_BEAT, state_mod.measure_now, state_mod.write_cache, state_mod.save = saved
+        up = "\033[%dA" % len(frames[0][0])
+        check(rc == 0 and out.count(up) == 4, "a terminal draws each frame over the last")
+        check(not any("o/o" in r and "( ooo )" in r for r in out.split("\n")), "rather than side by side")
+        # the open shell's rim is the one row no other frame or sprite has
+        check(out.index("\\   /") < out.index("Zask,") < out.index("Level "),
+              "and the reveal, then the card, follow the last frame")
+    finally:
+        os.environ.pop("NO_COLOR", None)
+
+
 def test_cli_hides_unhatched_name():
     """The list and doctor commands must not reveal an egg's suggested name."""
     print("\ncli hides unhatched name")
@@ -819,7 +934,8 @@ def test_cli_hides_unhatched_name():
             cli.cmd_list([])
         out = listed.getvalue()
         check("SuggestedName" not in out, "list hides the suggested name")
-        check("–" in out and "Unhatched" in out, "list uses the egg placeholders")
+        # a dash for the name, in whichever glyph set the roster drew with
+        check(("\u2013" in out or "-" in out) and "Egg" in out and "Unhatched" in out, "list uses the egg placeholders")
 
         diagnosed = io.StringIO()
         with contextlib.redirect_stdout(diagnosed):
@@ -3229,6 +3345,8 @@ if __name__ == "__main__":
     test_project_statusline_override()
     test_empty_hatch_is_a_moment()
     test_egg_reveals_nothing()
+    test_egg_in_its_box()
+    test_hatch_plays_out()
     test_cli_hides_unhatched_name()
     test_source_status()
     test_installer_wraps_any_statusline()

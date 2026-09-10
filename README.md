@@ -71,14 +71,24 @@ $ terminalcreature hatch
 
   the egg cracks
 
-       _^_
-     ( ' ' )
-      /$$$\
-       ^ ^
+  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐
+  │   ___     │  │     ___   │  │   ___     │  │    ___    │  │           │
+  │  /   \    │  │    /   \  │  │  /   \    │  │   / / \   │  │   \   /   │
+  │ ( ooo )   │  │   ( ooo ) │  │ ( ooo )   │  │  ( o/o )  │  │  ( ' ' )  │
+  │   \___/   │  │   \___/   │  │   \___/   │  │   \_/_/   │  │   \___/   │
+  └───────────┘  └───────────┘  └───────────┘  └───────────┘  └───────────┘
 
-  Zask, a Legendary Nim (shiny)
-  Lv41 Adept
+  ┌───────────┐
+  │    \|/    │  Zask, a Legendary Nim (shiny)
+  │  ( ' ' )  │  Lv41 Adept
+  │  <|$$$|>  │
+  │   /|_|\   │
+  │   ^   ^   │
+  └───────────┘
 ```
+
+In a terminal the egg rocks and cracks in place before the reveal. Anywhere that can't
+animate, an agent's transcript or a pipe, gets the frames side by side like film.
 
 ## Works with
 
@@ -343,14 +353,12 @@ A buddy is an **egg** until you hatch it, whatever level it is. Level 0 is a Hat
 ```
 $ terminalcreature card
 
-       ___
-      /   \
-     ( ooo )
-      \___/
-
-  Unhatched
-  0 xp eaten and counting
-  /creature-hatch to find out what it is
+  ┌───────────┐
+  │    ___    │  Unhatched
+  │   /   \   │  0 xp eaten and counting
+  │  ( ooo )  │  /creature-hatch to find out what it is
+  │   \___/   │
+  └───────────┘
 ```
 
 **Eggs bank XP while closed**, so waiting costs nothing. A buddy added later with `--add` starts at 0 and hatches as a Hatchling, because XP banks per creature.

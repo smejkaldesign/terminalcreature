@@ -26,6 +26,13 @@ PYTHONPATH="$HOME/.claude/terminalcreature/lib" python3 -m terminalcreature.cli 
 
 If there's no buddy yet, there's nothing to replace. Just run `new` and skip the question.
 
+## Show the egg
+
+`new` ends on the egg drawn in its box, the same container the statusline uses. **Print that
+output as-is, inside a code block**, so the art keeps its alignment and the first thing they
+see is the egg they just laid. Don't paraphrase it into a sentence, and don't run `list`
+afterwards in its place: the roster is one glyph and a dash, not the egg.
+
 ## Replace keeps the old one
 
 `--replace` retires, it doesn't delete. The old buddy stays in `list` with its banked XP and

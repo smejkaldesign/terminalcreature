@@ -92,8 +92,11 @@ PYTHONPATH="$HOME/.claude/terminalcreature/lib" python3 -m terminalcreature.cli 
 ```
 
 Add `--from-zero` if that's what they picked, and `--name <their choice>` unless they chose
-to let it name itself. Print what the CLI returns; it emits the reveal and then the full
-card, so don't also run `card` afterwards.
+to let it name itself. **Print what the CLI returns as-is, inside a code block.** It plays
+the hatch as a row of frames (the egg rocks, cracks, and what's inside looks out), then the
+reveal in its box, then the full card. The frames are the hatch, so keep every one of them
+and keep them in order; don't trim the strip to the last frame, paraphrase it, or run
+`card` afterwards.
 
 `hatch` measures the source fresh rather than trusting the cache, so a provider set seconds
 earlier is scored correctly.
