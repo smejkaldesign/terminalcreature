@@ -3,7 +3,12 @@
 Notable changes, newest first. Versions follow semver; the version lives in
 `terminalcreature/__init__.py` and each release is the matching `v*` tag.
 
-## Unreleased
+## 3.3.0 (2026-09-10)
+
+Moods, and the egg in its box. The creature blinks on its own schedule, eats
+when it gains xp, sleeps when you leave, wakes when you're back, and gets
+upset when it's gone hungry. The egg you lay sits in the same box the
+statusline draws, and the hatch plays out instead of cutting to the reveal.
 
 ### Added
 
@@ -11,6 +16,20 @@ Notable changes, newest first. Versions follow semver; the version lives in
   it, and shows what's inside looking out before the reveal; anywhere that
   can't animate (an agent transcript, a pipe) gets the same frames side by
   side like film, wrapped to the width. `/creature-hatch` prints the strip.
+- Wide eyes (`O O`) for a second when a feed moves the level, then the meal
+  carries on. Sessions written before this version don't fake a level-up on
+  their first feed.
+- Sleep. A session that stops redrawing for 15 minutes was asleep, and the
+  redraw that ends the gap is you coming back: sleepy eyes (`z z`) for three
+  seconds, then up. The last redraw is stamped at most every 30 seconds so
+  the state file isn't rewritten on every frame.
+- Upset (`> <`) once the creature has gone four hours without a feed, in any
+  session. The next feed cheers it up. A creature from before feeds were
+  stamped counts as just fed, so an upgrade doesn't wake it up upset.
+- Per-species swaps where the resting eyes already looked like the mood:
+  Quill's upset is `x x`, Wisp squints with `_ _`, Mote and Fen go wide with
+  `0 0`. Every mood is plain ascii, only the eye row changes, and the art
+  never changes width.
 
 ### Changed
 
@@ -18,6 +37,16 @@ Notable changes, newest first. Versions follow semver; the version lives in
   reveal draw the creature inside the same bordered container the statusline
   uses, with the text beside it, instead of a floating sprite. The hatched
   card too. `config border false` drops the box on every surface at once.
+- Blinks on a random schedule instead of a fixed 0.4s-of-every-5s beat: eyes
+  shut for 0.5s, then open for a gap drawn between 1 and 10 seconds. The
+  schedule is read off the clock in hour blocks, so every redraw agrees on it
+  with nothing stored. Open is the resting face; every other mood sits on
+  top of the blinking and it carries on underneath.
+- A feed is now a meal: a squint over the mouthful (`- -`) and the happy face
+  alternate on a 0.35s beat for 1.5s, then the happy face (`^ ^`) is the
+  resting face for the next ten minutes, blinks and all. Same trigger as
+  before, the session's xp counter rising, but the afterglow is the
+  creature's: a feed another window saw still counts.
 
 ### Fixed
 
@@ -25,30 +54,6 @@ Notable changes, newest first. Versions follow semver; the version lives in
   both surfaces use consistent capitalization for egg labels.
 - `install.sh` still ends on the egg: its closing lines looked for the old
   lowercase `unhatched` in `list` and went quiet once the row was capitalised.
-
-## 3.3.0 (2026-09-07)
-
-Moods. The creature blinks a lot more, eats when it gains xp, and has a few
-more faces to make.
-
-### Changed
-
-- Blinks every 2 seconds instead of every 5, and holds the closed eyes for
-  0.5s so a redraw actually catches it. Every third window blinks twice.
-- A feed is now a meal: the eyes scrunch into a mouthful (`> <`) and open
-  again on a 0.35s beat for 1.5s, then the happy face holds for the rest of
-  3 seconds. Same trigger as before, the session's xp counter rising.
-
-### Added
-
-- Wide eyes (`O O`) for 1.5s when a feed moves the level, then the happy
-  face for the rest of the meal. Sessions written before this version don't
-  fake a level-up on their first feed.
-- Sleepy eyes (`z z`) once a session has gone 30 minutes without a feed. No
-  blinking while asleep; the next feed wakes it.
-- Per-species swaps where the resting eyes already looked like the mood:
-  Quill chomps with `x x`, Mote and Fen go wide with `0 0`. Every mood is
-  plain ascii, only the eye row changes, and the art never changes width.
 
 ## 3.2.0 (2026-09-04)
 

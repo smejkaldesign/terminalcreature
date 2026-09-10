@@ -93,15 +93,16 @@ GLYPHS_ASCII = [".", "o", "c", "C", "O", "@"]
 
 
 # Moods swap the eyes and nothing else. A blink is a closed pair, happy is a
-# raised pair, chomp is the scrunch of a mouthful, wow is wide, sleepy is
-# snoring; species whose resting eyes already look like one get another shape
-# so the change still reads. (sprite pair, compact pair)
+# raised pair, chew is a squint over a mouthful, wow is wide, sleepy is
+# snoring, upset is a scrunch; species whose resting eyes already look like
+# one get another shape so the change still reads. (sprite pair, compact pair)
 MOOD_EYES = {
     "blink":  {"default": ("- -", "--"), "Wisp": ("_ _", "__")},
     "happy":  {"default": ("^ ^", "^^"), "Ember": ("* *", "**")},
-    "chomp":  {"default": ("> <", "><"), "Quill": ("x x", "xx")},
+    "chew":   {"default": ("- -", "--"), "Wisp": ("_ _", "__")},
     "wow":    {"default": ("O O", "OO"), "Mote": ("0 0", "00"), "Fen": ("0 0", "00")},
     "sleepy": {"default": ("z z", "zz")},
+    "upset":  {"default": ("> <", "><"), "Quill": ("x x", "xx")},
 }
 
 
