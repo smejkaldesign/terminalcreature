@@ -3,7 +3,12 @@
 Notable changes, newest first. Versions follow semver; the version lives in
 `terminalcreature/__init__.py` and each release is the matching `v*` tag.
 
-## Unreleased
+## 3.3.0 (2026-09-10)
+
+Moods, and the egg in its box. The creature blinks on its own schedule, eats
+when it gains xp, sleeps when you leave, wakes when you're back, and gets
+upset when it's gone hungry. The egg you lay sits in the same box the
+statusline draws, and the hatch plays out instead of cutting to the reveal.
 
 ### Added
 
@@ -11,41 +16,6 @@ Notable changes, newest first. Versions follow semver; the version lives in
   it, and shows what's inside looking out before the reveal; anywhere that
   can't animate (an agent transcript, a pipe) gets the same frames side by
   side like film, wrapped to the width. `/creature-hatch` prints the strip.
-
-### Changed
-
-- The egg sits in its box. `new`, `card` on an unhatched egg, and the hatch
-  reveal draw the creature inside the same bordered container the statusline
-  uses, with the text beside it, instead of a floating sprite. The hatched
-  card too. `config border false` drops the box on every surface at once.
-
-### Fixed
-
-- `list` and `doctor` no longer reveal an unhatched egg's suggested name, and
-  both surfaces use consistent capitalization for egg labels.
-- `install.sh` still ends on the egg: its closing lines looked for the old
-  lowercase `unhatched` in `list` and went quiet once the row was capitalised.
-
-## 3.3.0 (2026-09-07)
-
-Moods. The creature blinks on its own schedule, eats when it gains xp, sleeps
-when you leave, wakes when you're back, and gets upset when it's gone hungry.
-
-### Changed
-
-- Blinks on a random schedule instead of a fixed 0.4s-of-every-5s beat: eyes
-  shut for 0.5s, then open for a gap drawn between 1 and 10 seconds. The
-  schedule is read off the clock in hour blocks, so every redraw agrees on it
-  with nothing stored. Open is the resting face; every other mood sits on
-  top of the blinking and it carries on underneath.
-- A feed is now a meal: a squint over the mouthful (`- -`) and the happy face
-  alternate on a 0.35s beat for 1.5s, then the happy face (`^ ^`) is the
-  resting face for the next ten minutes, blinks and all. Same trigger as
-  before, the session's xp counter rising, but the afterglow is the
-  creature's: a feed another window saw still counts.
-
-### Added
-
 - Wide eyes (`O O`) for a second when a feed moves the level, then the meal
   carries on. Sessions written before this version don't fake a level-up on
   their first feed.
@@ -60,6 +30,30 @@ when you leave, wakes when you're back, and gets upset when it's gone hungry.
   Quill's upset is `x x`, Wisp squints with `_ _`, Mote and Fen go wide with
   `0 0`. Every mood is plain ascii, only the eye row changes, and the art
   never changes width.
+
+### Changed
+
+- The egg sits in its box. `new`, `card` on an unhatched egg, and the hatch
+  reveal draw the creature inside the same bordered container the statusline
+  uses, with the text beside it, instead of a floating sprite. The hatched
+  card too. `config border false` drops the box on every surface at once.
+- Blinks on a random schedule instead of a fixed 0.4s-of-every-5s beat: eyes
+  shut for 0.5s, then open for a gap drawn between 1 and 10 seconds. The
+  schedule is read off the clock in hour blocks, so every redraw agrees on it
+  with nothing stored. Open is the resting face; every other mood sits on
+  top of the blinking and it carries on underneath.
+- A feed is now a meal: a squint over the mouthful (`- -`) and the happy face
+  alternate on a 0.35s beat for 1.5s, then the happy face (`^ ^`) is the
+  resting face for the next ten minutes, blinks and all. Same trigger as
+  before, the session's xp counter rising, but the afterglow is the
+  creature's: a feed another window saw still counts.
+
+### Fixed
+
+- `list` and `doctor` no longer reveal an unhatched egg's suggested name, and
+  both surfaces use consistent capitalization for egg labels.
+- `install.sh` still ends on the egg: its closing lines looked for the old
+  lowercase `unhatched` in `list` and went quiet once the row was capitalised.
 
 ## 3.2.0 (2026-09-04)
 
