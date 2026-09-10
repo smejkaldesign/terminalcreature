@@ -8,6 +8,7 @@ that earned the first hundred levels is still sitting there.
 
 import json
 import os
+import random
 import time
 
 from . import creature as creature_mod
@@ -121,52 +122,110 @@ def hookcard_turn(state, session_id, gain, stage_index, mode):
     return show, stage_changed
 
 
-# a feed is a meal: chewing frames that alternate every CHEW_BEAT for CHEW_HOLD,
-# then a happy face until HAPPY_HOLD is up. held long enough to be seen between
-# redraws, short enough not to be a stuck face
-HAPPY_HOLD = 3.0
+# a feed is a meal: chewing frames that alternate every CHEW_BEAT for
+# CHEW_HOLD, then a happy resting face (blinks still land on it) for
+# HAPPY_HOLD. a face that swaps back to neutral the moment the mouthful is
+# down looked like it hadn't enjoyed it
 CHEW_HOLD = 1.5
 CHEW_BEAT = 0.35
-# a level that moved gets wide eyes first, then the rest of the meal's happy face
-WOW_HOLD = 1.5
-# a blink is a beat, not a state: this many seconds out of every window. every
-# DOUBLE_EVERY-th window blinks twice, BLINK_GAP apart, so it doesn't tick like a clock
-BLINK_EVERY = 2.0
+HAPPY_HOLD = 10 * 60
+# a level that moved gets wide eyes first, then the meal carries on
+WOW_HOLD = 1.0
+# a blink is a beat, not a state: BLINK_HOLD shut, then open for a gap drawn
+# between BLINK_GAP_MIN and BLINK_GAP_MAX. the schedule comes off the clock in
+# BLINK_BLOCK-second blocks, so every redraw agrees on it with nothing stored,
+# and a fixed window would tick like a clock. each block starts its own draw,
+# so the gap across a block edge can run to twice the max; an hour keeps that rare
 BLINK_HOLD = 0.5
-BLINK_GAP = 0.3
-DOUBLE_EVERY = 3
-# nothing eaten this long into a session and it dozes off. the next feed wakes it
-SLEEPY_AFTER = 30 * 60
+BLINK_GAP_MIN = 1.0
+BLINK_GAP_MAX = 10.0
+BLINK_BLOCK = 3600
+# a session that stops redrawing for SLEEP_AFTER was asleep. the redraw that
+# ends the gap is you coming back, so it wakes: sleepy eyes for WAKE_HOLD, then
+# whatever the day holds. the last redraw is stamped at most every SEEN_EVERY so
+# the state file isn't rewritten on every frame
+SLEEP_AFTER = 15 * 60
+WAKE_HOLD = 3.0
+SEEN_EVERY = 30
+# nothing eaten in HUNGRY_AFTER, across every session, and it's upset about it
+HUNGRY_AFTER = 4 * 3600
 
 
-def mood(state, session_id, now=None):
-    """The face to draw right now, most urgent first. "wow" for WOW_HOLD after
-    the session saw a level rise; "chomp"/"happy" through the meal that follows
-    a feed; "sleepy" once a session has gone SLEEPY_AFTER without one; else a
-    "blink" for BLINK_HOLD out of every BLINK_EVERY seconds, doubled every
-    DOUBLE_EVERY-th window; else None. Clock-based rather than counted: a
-    statusline redraws whenever the host feels like it, so a count would
-    blink at random.
+def touch(state, session_id, now=None):
+    """Note that this session just drew the creature. Returns whether the row
+    changed and wants saving. A gap of SLEEP_AFTER since the last draw means
+    it was asleep and this draw is the wake-up, so that's stamped too.
     """
     now = time.time() if now is None else now
     row = (state.get("sessions") or {}).get(session_id) if session_id else None
+    if row is None:
+        return False
+    last = row.get("seen_at")
+    if last is None:
+        row["seen_at"] = now
+        return True
+    if now - last >= SLEEP_AFTER:
+        row["woke_at"] = now
+    elif now - last < SEEN_EVERY:
+        return False
+    row["seen_at"] = now
+    return True
+
+
+def mood(state, session_id, now=None):
+    """The face to draw right now, most urgent first. "sleepy" for WAKE_HOLD
+    after a session woke; "wow" for WOW_HOLD after it saw a level rise; the
+    "chew"/"happy" frames of a fresh meal; a "blink" when the schedule says
+    the eyes are shut; "happy" for HAPPY_HOLD after a feed; "upset" once the
+    creature has gone HUNGRY_AFTER without one; else None. Clock-based rather
+    than counted: a statusline redraws whenever the host feels like it, so a
+    count would blink at random.
+    """
+    now = time.time() if now is None else now
+    row = (state.get("sessions") or {}).get(session_id) if session_id else None
+    fed = row.get("fed_at", 0) if row else 0
     if row:
+        if 0 <= now - row.get("woke_at", 0) < WAKE_HOLD:
+            return "sleepy"
         if 0 <= now - row.get("leveled_at", 0) < WOW_HOLD:
             return "wow"
-        since = now - row.get("fed_at", 0)
-        if 0 <= since < HAPPY_HOLD:
-            if since < CHEW_HOLD and int(since / CHEW_BEAT) % 2 == 0:
-                return "chomp"
-            return "happy"
-        if row.get("ts") and now - max(row.get("fed_at", 0), row["ts"]) >= SLEEPY_AFTER:
-            return "sleepy"
-    phase = now % BLINK_EVERY
-    if phase < BLINK_HOLD:
+        if 0 <= now - fed < CHEW_HOLD:
+            return "chew" if int((now - fed) / CHEW_BEAT) % 2 == 0 else "happy"
+    if blinking(now):
         return "blink"
-    again = BLINK_HOLD + BLINK_GAP
-    if int(now // BLINK_EVERY) % DOUBLE_EVERY == 0 and again <= phase < again + BLINK_HOLD:
-        return "blink"
+    # the meal's afterglow and hunger are the creature's, not one session's:
+    # a feed another window saw still counts
+    c = focused(state)
+    last = max(fed, (c or {}).get("fed_at") or 0)
+    if last and 0 <= now - last < HAPPY_HOLD:
+        return "happy"
+    if last and now - last >= HUNGRY_AFTER:
+        return "upset"
     return None
+
+
+def _blinks(block):
+    """Seconds into block `block` at which each of its blinks starts."""
+    draw = random.Random(block).uniform
+    out, t = [], draw(BLINK_GAP_MIN, BLINK_GAP_MAX)
+    while t < BLINK_BLOCK:
+        out.append(t)
+        t += BLINK_HOLD + draw(BLINK_GAP_MIN, BLINK_GAP_MAX)
+    return out
+
+
+def _shut_in(block, at):
+    """Whether second `at` of block `block` falls inside one of its blinks."""
+    return any(t <= at < t + BLINK_HOLD for t in _blinks(block))
+
+
+def blinking(now):
+    """Whether the eyes are shut at this instant. A blink that starts at the
+    end of one block finishes in the next rather than being cut short.
+    """
+    block, at = divmod(now, BLINK_BLOCK)
+    block = int(block)
+    return _shut_in(block, at) or _shut_in(block - 1, at + BLINK_BLOCK)
 
 
 def migrate(data):
@@ -200,6 +259,10 @@ def migrate(data):
             c["xp_banked"] = 0
         if c.get("last_stage_seen") is None:
             c["last_stage_seen"] = 0
+        # a creature from before feeds were stamped counts as just fed, so an
+        # upgrade doesn't wake it up upset
+        if c.get("fed_at") is None:
+            c["fed_at"] = time.time()
     state["creatures"] = creatures
 
     if state.get("focused") not in {c["id"] for c in creatures}:
@@ -410,6 +473,7 @@ def sync(state, current_xp):
     if delta > 0:
         state["high_water_xp"] = current_xp
         c["xp_banked"] = c.get("xp_banked", 0) + delta
+        c["fed_at"] = time.time()
 
     level = metric.level_for(c["xp_banked"], state["settings"]["xp_max"])
     idx, name = metric.stage_for(level)
