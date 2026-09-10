@@ -382,12 +382,13 @@ def cmd_list(args):
             # rarity and shiny come off the seed, so an egg must not print them
             desc = full["rarity"] + (" shiny" if full["shiny"] else "")
         else:
-            idx, stage, level_col = metric.EGG_SPRITE, "unhatched", "egg   "
+            idx, stage, level_col = metric.EGG_SPRITE, "Unhatched", "Egg   "
             desc = ""
+        shown_name = c["name"] if state_mod.is_hatched(c) else "–"
         flag = "*" if c["id"] == st.get("focused") else " "
         note = "retired" if c.get("retired_at") else ""
         print(("%s %s %-10s %s %-10s %s %s" % (
-            flag, sprites.glyph(idx, uni), c["name"], level_col, stage, desc, note)).rstrip())
+            flag, sprites.glyph(idx, uni), shown_name, level_col, stage, desc, note)).rstrip())
     print("\n* = focused (the one gaining xp)")
     return 0
 
@@ -628,8 +629,10 @@ def cmd_doctor(args):
     if c is not None:
         banked = c.get("xp_banked", 0)
         bp = metric.progress(banked, settings["xp_max"])
-        stage = bp["stage"] if state_mod.is_hatched(c) else "egg"
-        print("%s banked %d -> level %d (%s)" % (c["name"], banked, bp["level"], stage))
+        hatched = state_mod.is_hatched(c)
+        stage = bp["stage"] if hatched else "Egg"
+        shown_name = c["name"] if hatched else "Unhatched"
+        print("%s banked %d -> level %d (%s)" % (shown_name, banked, bp["level"], stage))
     # piped a host's statusline json? say which shape it was read as, so a
     # sessionless render on a new host is one doctor run from an answer
     raw = _waiting_stdin()
