@@ -175,7 +175,7 @@
   .terminal-btn { font-family: var(--mono); font-size: 11px; color: var(--muted); background: #101c15; border: 1px solid var(--line-2); border-radius: 5px; padding: 4px 9px; }
   .terminal-btn:hover { color: var(--text); border-color: var(--gold); }
   .terminal-body { padding: 20px 22px; font-family: var(--mono); font-size: 13.5px; line-height: 1.75; min-height: 380px; white-space: pre; overflow-x: auto; color: var(--body); }
-  .t-prompt { color: var(--xp); } .t-cmd { color: var(--text); } .t-dim { color: var(--dim); } .t-gold { color: var(--gold); } .t-art { color: var(--gold-2); text-shadow: 0 0 10px rgba(var(--gold-rgb), .4); }
+  .t-prompt { color: var(--xp); } .t-cmd { color: var(--text); } .t-dim { color: var(--dim); } .t-gold { color: var(--gold); } .t-art { color: var(--gold-2); text-shadow: 0 0 10px rgba(var(--gold-rgb), .4); } .t-art .frame { color: #3a5546; text-shadow: none; }
   .t-cursor { display: inline-block; width: 8px; height: 15px; background: var(--gold); vertical-align: -2px; animation: blink 1s steps(1) infinite; }
   .t-status { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 6px; background: #070d0a; color: var(--muted); }
   .t-status .frame { color: #3a5546; } .t-status .creature { color: var(--gold-2); } .t-status .bar { color: var(--xp); }
@@ -660,6 +660,34 @@
     return STAGES[stage].map(function (r) { return pad(r.split("{m}").join(motif).split("{e}").join(e)); }).join("\n");
   }
   function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  // the box the CLI draws around every sprite, and the hatch as it plays it:
+  // the egg rocks one way and the other, cracks, and what's inside looks out
+  var BOX = ["\u250c", "\u2500", "\u2510", "\u2502", "\u2514", "\u2518"];
+  function trimArt(rows) {
+    rows = rows.filter(function (r) { return r.trim(); });
+    var ind = Math.min.apply(null, rows.map(function (r) { return r.length - r.replace(/^\s+/, "").length; }));
+    rows = rows.map(function (r) { return r.slice(ind).replace(/\s+$/, ""); });
+    // pinned to the widest form's column, as the CLI does, so every box is one width
+    var widest = Math.max.apply(null, rows.map(function (r) { return r.length; })), w = Math.max(9, widest), lead = Math.floor((w - widest) / 2);
+    // one lead for every row: centring row by row would undo the art's own padding
+    return rows.map(function (r) { return (" ".repeat(lead) + r) + " ".repeat(w - lead - r.length); });
+  }
+  function boxHTML(rows, right) {
+    function f(t) { return '<span class="frame">' + t + "</span>"; }
+    var edge = BOX[1].repeat(rows[0].length + 2), out = "  " + f(BOX[0] + edge + BOX[2]) + "\n";
+    rows.forEach(function (r, k) { out += "  " + f(BOX[3]) + " " + esc(r) + " " + f(BOX[3]) + (right && right[k] ? "  " + right[k] : "") + "\n"; });
+    return out + "  " + f(BOX[4] + edge + BOX[5]);
+  }
+  function hatchFrames() {
+    var egg = trimArt(sprite(SPECIES[0], 0, false).split("\n")).map(function (r) { return r.trim() ? r.replace(/^ | $/g, "") : r; }), w = 9;
+    function cell(rows, lean) {
+      return rows.map(function (r, k) { var s = " ".repeat(k < rows.length - 1 ? 1 + (lean || 0) : 1) + r; return s + " ".repeat(w - s.length); });
+    }
+    var crack = ["  ___  ", " / / \\ ", "( o/o )", " \\_/_/ "];
+    var peek = ["       ", " \\   / ", "( " + NIM[2] + " )", " \\___/ "];
+    return [cell(egg, -1), cell(egg, 1), cell(egg, -1), cell(crack), cell(peek)];
+  }
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // matrix rain, drawn from the same characters the sprites are built from
@@ -723,9 +751,9 @@
     ["dim", "  two names from the egg: Zask, Fimi · going with Zask"],
     ["gap"],
     ["gold", "  the egg cracks"],
-    ["art", sprite(NIM, 3, true).split("\n").map(function (r) { return "  " + r.replace(/\s+$/, ""); }).join("\n")],
-    ["gold", "  Zask, a Legendary Nim (shiny)"],
-    ["gold", "  Lv41 Adept"],
+    ["gap"],
+    ["hatch"],
+    ["reveal"],
     ["status"]
   ];
   var running = null;
@@ -806,7 +834,23 @@
         showHost(0); startCycle();
         return;
       }
-      if (s[0] === "art") { term.innerHTML += '<span class="t-art">' + esc(s[1]) + "</span>\n"; return setTimeout(line, 700); }
+      if (s[0] === "hatch") {
+        var frames = hatchFrames(), box = document.createElement("span"), k = 0;
+        box.className = "t-art";
+        term.appendChild(box);
+        if (reduce) { box.innerHTML = frames.map(function (fr) { return boxHTML(fr); }).join("\n\n"); term.innerHTML += "\n\n"; return setTimeout(line, 400); }
+        (function beat() {
+          box.innerHTML = boxHTML(frames[k++]);
+          if (k < frames.length) running = setTimeout(beat, 350);
+          else { term.innerHTML += "\n\n"; running = setTimeout(line, 500); }
+        })();
+        return;
+      }
+      if (s[0] === "reveal") {
+        var art = trimArt(sprite(NIM, 3, true).split("\n"));
+        term.innerHTML += '<span class="t-art">' + boxHTML(art, ['<span class="t-gold">Zask, a Legendary Nim (shiny)</span>', '<span class="t-gold">Lv41 Adept</span>']) + "</span>\n";
+        return setTimeout(line, 700);
+      }
       if (s[0] === "prompt") {
         var span = document.createElement("span");
         span.innerHTML = '<span class="t-prompt">' + esc(s[1]) + '</span><span class="t-cmd"></span><span class="t-cursor"></span>';
