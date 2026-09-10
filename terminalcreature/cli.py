@@ -7,6 +7,7 @@ and exits 0, because a broken pet should not break the prompt.
 import json
 import os
 import sys
+import time
 
 from . import __version__
 from . import creature as creature_mod
@@ -331,7 +332,14 @@ def cmd_hatch(args):
     # a zero here means there was nothing to count, not that the egg was empty.
     # --from-zero lands on Lv0 too, but that one was chosen and says so itself
     empty = not from_zero and not xp
-    print(render.hatch_ceremony(st, c))
+    if sys.stdout.isatty():
+        # a terminal gets the hatch played in place. anything else, an agent
+        # transcript or a pipe, gets the frames laid out side by side
+        print("\n  " + render.paint(render.HATCH_TITLE, render.DIM) + "\n")
+        _play(render.hatch_frames(st, c))
+        print("\n" + render.hatch_reveal(st, c) + "\n")
+    else:
+        print(render.hatch_ceremony(st, c))
     # art=False: the ceremony just showed the sprite and the name. showing the
     # identical creature again ten lines later dilutes the one reveal it gets
     print(render.card(st, xp=0 if from_zero else xp, counts=counts, hungry_note=not empty, art=False))
@@ -341,6 +349,18 @@ def cmd_hatch(args):
     elif empty:
         print("\n" + render.empty_hatch_note(st, state_mod.source_status(st["settings"])))
     return 0
+
+
+def _play(frames, beat=None):
+    """Draw each frame over the last, so the egg rocks on the spot and cracks
+    where it stood. The final frame stays; the reveal prints under it."""
+    beat = render.HATCH_BEAT if beat is None else beat
+    up = ""
+    for cells, _ in frames:
+        sys.stdout.write(up + "\n".join("  " + r for r in cells) + "\n")
+        sys.stdout.flush()
+        time.sleep(beat)
+        up = "\033[%dA" % len(cells)
 
 
 def cmd_names(args):
@@ -382,12 +402,15 @@ def cmd_list(args):
             # rarity and shiny come off the seed, so an egg must not print them
             desc = full["rarity"] + (" shiny" if full["shiny"] else "")
         else:
-            idx, stage, level_col = metric.EGG_SPRITE, "unhatched", "egg   "
+            idx, stage, level_col = metric.EGG_SPRITE, "Unhatched", "Egg   "
             desc = ""
+        # no name until the hatch chooses one. the dash is the row's blank, in
+        # whichever glyph set the roster is drawn with
+        shown_name = c["name"] if state_mod.is_hatched(c) else ("\u2013" if uni else "-")
         flag = "*" if c["id"] == st.get("focused") else " "
         note = "retired" if c.get("retired_at") else ""
         print(("%s %s %-10s %s %-10s %s %s" % (
-            flag, sprites.glyph(idx, uni), c["name"], level_col, stage, desc, note)).rstrip())
+            flag, sprites.glyph(idx, uni), shown_name, level_col, stage, desc, note)).rstrip())
     print("\n* = focused (the one gaining xp)")
     return 0
 
@@ -628,8 +651,10 @@ def cmd_doctor(args):
     if c is not None:
         banked = c.get("xp_banked", 0)
         bp = metric.progress(banked, settings["xp_max"])
-        stage = bp["stage"] if state_mod.is_hatched(c) else "egg"
-        print("%s banked %d -> level %d (%s)" % (c["name"], banked, bp["level"], stage))
+        hatched = state_mod.is_hatched(c)
+        stage = bp["stage"] if hatched else "Egg"
+        shown_name = c["name"] if hatched else "Unhatched"
+        print("%s banked %d -> level %d (%s)" % (shown_name, banked, bp["level"], stage))
     # piped a host's statusline json? say which shape it was read as, so a
     # sessionless render on a new host is one doctor run from an answer
     raw = _waiting_stdin()

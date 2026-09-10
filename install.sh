@@ -454,7 +454,7 @@ if [ -n "$SOURCE_HELP" ]; then echo "$SOURCE_HELP"; echo; fi
 
 # prompt off the roster, not off whether we just laid it, or a reinstall never
 # re-offers the one action the user still has to take
-if bb list 2>/dev/null | grep -q '^\*.*unhatched'; then
+if bb list 2>/dev/null | grep -qi '^\*.*unhatched'; then
   if [ "$WIRE" = 1 ] || [ "$HOSTWIRED" = 1 ] || [ -n "${HANDWIRED:-}" ]; then
     echo "there's an egg in your statusline, and it's hungry. open it:"
   else

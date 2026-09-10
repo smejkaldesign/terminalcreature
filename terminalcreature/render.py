@@ -425,6 +425,63 @@ def _column_width(full, short):
     )
 
 
+# the egg draws with Mote's look wherever it appears: the species is off the seed
+EGG_LOOK = {"species": "Mote", "shiny": False}
+
+
+def _pin(art, full, short=False):
+    """Centre trimmed art in the column its widest form takes, so the text beside
+    it doesn't jump two columns the day it evolves into an Ascendant."""
+    block = _column_width(full, short)
+    lead = " " * ((block - max(len(r) for r in art)) // 2)
+    # shift the whole sprite as one unit. centring row by row would undo the
+    # per-row padding the art relies on to line up
+    return [(lead + r).ljust(block) for r in art]
+
+
+def _egg_art():
+    return _pin(_trim(sprites.sprite("Mote", metric.EGG_SPRITE, False)), EGG_LOOK)
+
+
+def box(art, tint, uni):
+    """Rows of art inside the creature's container. Returns the painted cells
+    and the columns they take, since the escapes hide that from len()."""
+    tl, h, tr, v, bl, br = BOX_UNICODE if uni else BOX_ASCII
+    wide = max(len(r) for r in art)
+    # a column of breathing room, or a wide stage's arms touch the wall
+    inner = wide + 2 * BOX_PAD
+    wall = paint(v, BORDER)
+    pad = " " * BOX_PAD
+    cells = [paint(tl + h * inner + tr, BORDER)]
+    cells += [wall + paint(pad + r.ljust(wide) + pad, tint) + wall for r in art]
+    cells.append(paint(bl + h * inner + br, BORDER))
+    return cells, inner + 2
+
+
+def frame(art, tint, settings, uni=None):
+    """The container when the border is on, the bare art when it's off."""
+    if settings.get("border", True):
+        return box(art, tint, unicode_ok(settings) if uni is None else uni)
+    return [paint(r, tint) for r in art], max(len(r) for r in art)
+
+
+def panel(art, tint, settings, lines, indent="", uni=None):
+    """A sprite in its container with text rows beside it: the one layout the
+    creature has, on the statusline and on every card. Same box on each, so
+    the egg you just laid looks like the thing in the corner of your screen."""
+    cells, width = frame(art, tint, settings, uni)
+    if settings.get("border", True):
+        # the first text row belongs beside the head, not beside the box lid
+        lines = [""] + list(lines)
+    rows = []
+    for i in range(max(len(lines), len(cells))):
+        l = lines[i] if i < len(lines) else ""
+        # painted cells carry escape bytes, so pad from the known column width
+        cell = cells[i] if i < len(cells) else " " * width
+        rows.append((indent + cell + " " * GUTTER + l).rstrip())
+    return "\n".join(rows)
+
+
 def compose(st, left, xp=None, counts=None, gain=0, mood=None, fmt=None, width=None):
     """Merge a caller's statusline text with the creature as a left column.
 
@@ -455,7 +512,7 @@ def _compose(st, left, xp, counts, gain, mood):
     tint = RARITY_COLOR.get(full["rarity"], "") if hatched else DIM
 
     short = settings.get("sprite_height", 5) <= 3
-    art = _trim(sprites.sprite(full["species"], idx, full["shiny"], short=short, mood=mood))
+    art = _pin(_trim(sprites.sprite(full["species"], idx, full["shiny"], short=short, mood=mood)), full, short)
 
     banked = c["xp_banked"]
     lo = metric.xp_for_level(level, settings["xp_max"])
@@ -480,41 +537,10 @@ def _compose(st, left, xp, counts, gain, mood):
         # and everything else would spoil the reveal before you open it
         caption = paint("%s Unhatched · /creature-hatch" % icon, BOLD)
 
-    # pin the column to the widest form this creature will ever reach, so the text
-    # beside it doesn't jump two columns the day it evolves into an Ascendant
-    block = _column_width(full, short)
-    lead = " " * ((block - max(len(r) for r in art)) // 2)
-    # shift the whole sprite as one unit. centring row by row would undo the
-    # per-row padding the art relies on to line up
-    art = [(lead + r).ljust(block) for r in art]
-
     # fixed-width column, so nothing here needs the terminal width
     left_lines = left.split("\n") if left else []
     left_lines.append(caption)
-
-    if settings.get("border", True):
-        tl, h, tr, v, bl, br = BOX_UNICODE if uni else BOX_ASCII
-        # a column of breathing room, or a wide stage's arms touch the wall
-        inner = block + 2 * BOX_PAD
-        bar = paint(v, BORDER)
-        pad = " " * BOX_PAD
-        cells = [paint(tl + h * inner + tr, BORDER)]
-        cells += [bar + paint(pad + r + pad, tint) + bar for r in art]
-        cells.append(paint(bl + h * inner + br, BORDER))
-        # the caller's first row belongs beside the head, not beside the box lid
-        left_lines.insert(0, "")
-        width = inner + 2
-    else:
-        cells = [paint(r, tint) for r in art]
-        width = block
-
-    rows = []
-    for i in range(max(len(left_lines), len(cells))):
-        l = left_lines[i] if i < len(left_lines) else ""
-        # painted cells carry escape bytes, so pad from the known column width
-        cell = cells[i] if i < len(cells) else " " * width
-        rows.append((cell + " " * GUTTER + l).rstrip())
-    return "\n".join(rows)
+    return panel(art, tint, settings, left_lines, uni=uni)
 
 
 def sprite_block(full, label, stage_index, tint, settings, chip="", mood=None):
@@ -560,19 +586,18 @@ def _zero_note(st, xp):
 
 
 def egg_card(st, c):
-    """An egg's card. Names nothing derived from the seed, or there's no reveal left.
+    """An egg's card, in the box the statusline draws. Names nothing derived from
+    the seed, or there's no reveal left.
 
     Species, rarity, shiny, stage and stats all come off the seed and are known
     the moment the egg exists. Printing any of them here spoils the hatch.
     """
-    art = sprites.sprite("Mote", metric.EGG_SPRITE, False)
-    out = [""] + ["  " + r for r in art]
-    out += [
-        "",
-        "  %s" % paint("Unhatched", BOLD),
-        "  " + paint("%d xp eaten and counting" % c.get("xp_banked", 0), DIM),
-        "  " + paint("/creature-hatch to find out what it is", DIM),
+    text = [
+        paint("Unhatched", BOLD),
+        paint("%d xp eaten and counting" % c.get("xp_banked", 0), DIM),
+        paint("/creature-hatch to find out what it is", DIM),
     ]
+    out = ["", panel(_egg_art(), DIM, st["settings"], text, "  ")]
     note = _zero_note(st, c.get("xp_banked", 0))
     if note:
         out += ["", "  " + note]
@@ -645,14 +670,8 @@ def _card(st, xp, counts, hungry_note, art):
     if not art:
         return "\n".join("  " + r for r in info).rstrip()
 
-    sprite_art = sprites.sprite(full["species"], p["stage_index"], full["shiny"])
-    lines = []
-    pad = max(len(r) for r in sprite_art)
-    for i in range(max(len(sprite_art), len(info))):
-        left = sprite_art[i] if i < len(sprite_art) else " " * pad
-        right = info[i] if i < len(info) else ""
-        lines.append("  %s   %s" % (paint(left, tint), right))
-    return "\n".join(lines).rstrip()
+    sprite_art = _pin(_trim(sprites.sprite(full["species"], p["stage_index"], full["shiny"])), full)
+    return panel(sprite_art, tint, settings, info, "  ").rstrip()
 
 
 def _article(word):
@@ -660,21 +679,81 @@ def _article(word):
     return "an" if word[:1].lower() in "aeiou" else "a"
 
 
-def hatch_ceremony(st, c):
-    """The reveal. Shows whatever stage the egg banked its way to, not a baby."""
+HATCH_TITLE = "the egg cracks"
+# seconds each frame holds when a terminal plays the hatch in place
+HATCH_BEAT = 0.35
+
+
+def hatch_frames(st, c):
+    """The hatch, one beat per frame: the egg rocks, cracks, and whatever was
+    inside looks out. Each frame is one box's cells plus its width, so a
+    terminal can draw them over each other and a transcript can lay them side
+    by side. The rocking needs a column each side, so the cell is two wider
+    than the egg.
+    """
+    settings = st["settings"]
+    full = creature_mod.hydrate(c)
+    tint = RARITY_COLOR.get(full["rarity"], "")
+    eyes = sprites.look(full["species"])[1]
+    m = sprites.SPECIES_LOOK["Mote"][0]
+    egg = _trim(sprites.sprite("Mote", metric.EGG_SPRITE, False))
+    wide = max(len(r) for r in egg)
+
+    def cell(rows, lean=0):
+        # the top rows tip over, the base stays put: a rock, not a slide
+        top = [(" " * (1 + lean) + r).ljust(wide + 2) for r in rows[:-1]]
+        return top + [(" " + rows[-1]).ljust(wide + 2)]
+
+    crack = ["  ___  ", " / / \\ ", "( %s/%s )" % (m, m), " \\_/_/ "]
+    # the shell open at the top and the species' eyes looking out: the first
+    # thing off the seed to show, and the reveal is the very next thing drawn
+    peek = ["       ", " \\   / ", "( %s )" % eyes, " \\___/ "]
+    beats = [
+        (cell(egg, -1), DIM), (cell(egg, 1), DIM), (cell(egg, -1), DIM),
+        (cell(crack), DIM), (cell(peek), tint),
+    ]
+    return [frame(rows, t, settings) for rows, t in beats]
+
+
+def hatch_strip(st, c, width=None):
+    """The frames side by side, like film, for a transcript that can't animate.
+    Wraps onto more rows when they don't fit the width."""
+    limit = (width or CARD_LINE_WIDTH) - 2
+    rows, line, used = [], [], 0
+    for cells, w in hatch_frames(st, c):
+        if line and used + GUTTER + w > limit:
+            rows.append(line)
+            line, used = [], 0
+        line.append(cells)
+        used += w + (GUTTER if len(line) > 1 else 0)
+    rows.append(line)
+    out = []
+    for line in rows:
+        out.append("\n".join("  " + (" " * GUTTER).join(cells[i] for cells in line) for i in range(len(line[0]))))
+    return "\n\n".join(out)
+
+
+def hatch_reveal(st, c):
+    """What came out, in its box, with its name and the level it earned."""
     full = creature_mod.hydrate(c)
     level = metric.level_for(c.get("xp_banked", 0), st["settings"]["xp_max"])
     idx, stage = metric.stage_for(level)
     tint = RARITY_COLOR.get(full["rarity"], "")
-    art = sprites.sprite(full["species"], idx, full["shiny"])
-    out = ["", "  " + paint("the egg cracks", DIM), ""]
-    out += ["  " + paint(r, tint) for r in art]
-    out += [
-        "",
-        "  %s, %s %s %s%s" % (paint(full["name"], BOLD), _article(full["rarity"]), full["rarity"], full["species"], " (shiny)" if full["shiny"] else ""),
-        "  " + paint("Lv%d %s" % (level, stage), DIM),
-        "",
+    art = _pin(_trim(sprites.sprite(full["species"], idx, full["shiny"])), full)
+    text = [
+        "%s, %s %s %s%s" % (paint(full["name"], BOLD), _article(full["rarity"]), full["rarity"], full["species"], " (shiny)" if full["shiny"] else ""),
+        paint("Lv%d %s" % (level, stage), DIM),
     ]
+    return panel(art, tint, st["settings"], text, "  ")
+
+
+def hatch_ceremony(st, c, strip=True):
+    """The reveal. Shows whatever stage the egg banked its way to, not a baby.
+    strip=False for a terminal that has just played the frames itself."""
+    out = ["", "  " + paint(HATCH_TITLE, DIM), ""]
+    if strip:
+        out += [hatch_strip(st, c), ""]
+    out += [hatch_reveal(st, c), ""]
     return "\n".join(out)
 
 
@@ -697,21 +776,13 @@ def empty_hatch_note(st, status):
 
 
 def egg_notice(st, c):
-    """What you see after `new`: an egg, no level, and how to open it.
+    """What you see after `new`: an egg in its box, no level, and how to open it.
 
     Same rule as egg_card. `new` is the main way people get an egg, so a rarity
     colour here spoils the reveal for most of them.
     """
-    tint = DIM
-    art = sprites.sprite("Mote", metric.EGG_SPRITE, False)
-    out = [""] + ["  " + paint(r, tint) for r in art]
-    out += [
-        "",
-        "  %s" % paint("An egg, unhatched", BOLD),
-        "  " + paint("/creature-hatch to open it", DIM),
-        "",
-    ]
-    return "\n".join(out)
+    text = [paint("An egg, unhatched", BOLD), paint("/creature-hatch to open it", DIM)]
+    return "\n" + panel(_egg_art(), DIM, st["settings"], text, "  ") + "\n"
 
 
 CARD_LINE_WIDTH = 79

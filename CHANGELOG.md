@@ -3,6 +3,29 @@
 Notable changes, newest first. Versions follow semver; the version lives in
 `terminalcreature/__init__.py` and each release is the matching `v*` tag.
 
+## Unreleased
+
+### Added
+
+- The hatch plays out. `hatch` in a terminal rocks the egg in place, cracks
+  it, and shows what's inside looking out before the reveal; anywhere that
+  can't animate (an agent transcript, a pipe) gets the same frames side by
+  side like film, wrapped to the width. `/creature-hatch` prints the strip.
+
+### Changed
+
+- The egg sits in its box. `new`, `card` on an unhatched egg, and the hatch
+  reveal draw the creature inside the same bordered container the statusline
+  uses, with the text beside it, instead of a floating sprite. The hatched
+  card too. `config border false` drops the box on every surface at once.
+
+### Fixed
+
+- `list` and `doctor` no longer reveal an unhatched egg's suggested name, and
+  both surfaces use consistent capitalization for egg labels.
+- `install.sh` still ends on the egg: its closing lines looked for the old
+  lowercase `unhatched` in `list` and went quiet once the row was capitalised.
+
 ## 3.3.0 (2026-09-07)
 
 Moods. The creature blinks a lot more, eats when it gains xp, and has a few
